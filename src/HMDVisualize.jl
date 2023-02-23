@@ -64,6 +64,8 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false)
     )
 
     render_box!(axis, s)
+
+    #mmeshを1つに結合する方法を調べる geometrybasics
     for (pos, e) in zip(all_positions(s), all_elements(s))
         meshscatter!(axis, pos, #Sphere(Point{3, Float64}(p), 0.3);
                     color = atom_color[string(e)],
@@ -71,6 +73,7 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false)
         )
     end
 
+    # メッシュを結合する？
     for (edge, n) in zip(edges(topology(s)), 1:nbond(s))
         atom_id1, atom_id2 = src(edge), dst(edge)
         render_bond!(axis, s, atom_id1, atom_id2; radius=0.15, wrap_coord=wrap_coord)
