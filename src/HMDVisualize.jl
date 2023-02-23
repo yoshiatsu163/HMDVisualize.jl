@@ -49,18 +49,18 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false)
     end
 
     f = Figure()
-    axis = Axis3(f[1,1];
-            xticksvisible = false,
-            yticksvisible = false,
-            zticksvisible = false,
-            xticklabelsvisible = false,
-            yticklabelsvisible = false,
-            zticklabelsvisible = false,
-            xgridvisible = false,
-            ygridvisible = false,
-            zgridvisible = false,
-            aspect = :data,
-            viewmode = :fit
+    axis = LScene(f[1,1]; show_axis = false
+            #xticksvisible = false,
+            #yticksvisible = false,
+            #zticksvisible = false,
+            #xticklabelsvisible = false,
+            #yticklabelsvisible = false,
+            #zticklabelsvisible = false,
+            #xgridvisible = false,
+            #ygridvisible = false,
+            #zgridvisible = false,
+            #aspect = :data,
+            #viewmode = :fit
     )
 
     render_box!(axis, s)
