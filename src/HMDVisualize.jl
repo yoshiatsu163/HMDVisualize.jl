@@ -1,17 +1,19 @@
 module HMDVisualize
 
 using Colors
+# Choose colorschemes with care! Refer to Peter Kovesi's PerceptualColourMaps package, or to Fabio Crameri's Scientific Colour Maps for more information.
+using ColorSchemes: colorschemes, get
 using GeometryBasics
 using Graphs
 using HMD
 using LinearAlgebra
 #using MakieCore
-using GLMakie
+using GLMakie #cite
 using PeriodicTable
 
 import GeometryBasics: Cylinder
 
-export visualize
+export visualize, color_scheme
 
 const atom_color = Dict(
     elements[:H ].symbol => "#" * hex(HSL(170/255, 0  /255, 240/255)),
@@ -25,16 +27,11 @@ const atom_color = Dict(
     "beads"              => "#" * hex(HSL(170/255, 0  /255, 100/255))
 )
 
-#@MakieCore.recipe(Visualize, s) do scene
-#    Attributes(
-#        atomcolor = :atom_color,
-#        atom_radius = 0.3,
-#        bond_radius = 0.15,
-#        wrap = false
-#    )
-#end
-
-function visualize(s::AbstractSystem; wrap_coord::Bool=false)
+#TODO 色情報の渡し方 {default | additional color} and {discrete | colormap}
+# 対象原子の指定方法 + 色指定
+# 原子id => colorant?
+# help functions: sample_colormap(::AbstractFloat; cmap)
+function visualize(s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:Integer, String}=Dict{Int64, String}())
     if dimension(s) != 3
         error("expected dimension 3, found $D")
     end
@@ -66,19 +63,36 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false)
     render_box!(axis, s)
 
     #mmeshを1つに結合する方法を調べる geometrybasics
-    for (pos, e) in zip(all_positions(s), all_elements(s))
-        meshscatter!(axis, pos, #Sphere(Point{3, Float64}(p), 0.3);
-                    color = atom_color[string(e)],
-                    markersize = 0.3
-        )
+    #for (pos, e) in zip(all_positions(s), all_elements(s))
+    #    meshscatter!(axis, pos
+    #                color = atom_color[string(e)],
+    #                markersize = 0.3
+    #    )
+    #end
+    set_color(atom_id) = begin
+        if atom_id ∈ keys(add_color)
+            add_color[atom_id]
+        else
+            atom_color[string(element(s, atom_id))]
+        end
     end
+    meshscatter!(axis, Point3f.(all_positions(s)), color=set_color.(1:natom(s)), markersize = 0.3)
 
-    # メッシュを結合する？
+    # mesh単位でメタデータ新納情報を持たせ、プロット直前にatomともmerge
+    bmesh = [normal_mesh(Cylinder(zeros(3), ones(3), 0.15))] |> empty
+    colors = String[]
     for (edge, n) in zip(edges(topology(s)), 1:nbond(s))
         atom_id1, atom_id2 = src(edge), dst(edge)
-        render_bond!(axis, s, atom_id1, atom_id2; radius=0.15, wrap_coord=wrap_coord)
+        #render_bond!(axis, s, atom_id1, atom_id2; radius=0.15, wrap_coord=wrap_coord)
+        bm, each_color = bond_mesh(s, atom_id1, atom_id2; radius=0.15, wrap_coord=wrap_coord, color_func=set_color)
+        append!(bmesh, bm)
+        append!(colors, each_color)
     end
-
+    for cl in unique(colors)
+        color_mesh = [bmesh[i] for i in 1:length(colors) if colors[i] == cl]
+        mesh!(axis, merge(color_mesh); color=cl)
+    end
+    
     if changed && wrapped(s)
         unwrap!(s)
     elseif changed && !wrapped(s)
@@ -149,6 +163,69 @@ function render_bond!(axis, s::AbstractSystem, atom_id1::Integer, atom_id2::Inte
             mesh!(axis, bm; color = bond_color)
         end
     end
+end
+
+function bond_mesh(s::AbstractSystem, atom_id1::Integer, atom_id2::Integer; radius::AbstractFloat, wrap_coord::Bool, color_func::Function)
+    # boxとbondの交点
+    # [(α, p, bool)]
+    points = if wrap_coord
+        separate_points(s, atom_id1, atom_id2)
+    else
+        [(len=0.0, point=zeros(3), jump=false)] |> empty!
+    end
+
+    # 始点と終点を追加
+    push!(points, (len=0.0, point=position(s, atom_id1), jump=false))
+    push!(points, (len=1.0, point=position(s, atom_id2), jump=false))
+
+    #println("$(norm(points[1].point .- points[end].point))")
+    #for p in points
+    #    println("   $(p.len) $(p.point)")
+    #end
+    #println()
+
+    # 色分けのため中点を追加
+    push!(points, (len=0.5, point=zeros(3), jump=false))
+    sort!(points, by=tuple->tuple[1]) # sort by α
+    i = findfirst(tuple -> tuple.len==0.5, points)
+    α_center = (0.5 .- points[i-1].len) / (points[i+1].len .- points[i-1].len)
+    points[i] = (len = points[i].len,
+                point = points[i-1].point .+ α_center .* (points[i+1].point .- points[i-1].point),
+                jump = false)
+
+    #
+    p_ = points[2]
+    bmesh = [Cylinder(points[1].point, p_.point, radius)]
+    for p in points[3:end]
+        if !p.jump
+            push!(bmesh, Cylinder(p_.point, p.point, radius))
+        end
+        p_ = p
+    end
+    bo = bond_order(s, atom_id1, atom_id2)
+
+    # mesh vector
+    meshes = [bmesh[1]] |> empty
+    colors = String[]
+    for i in 1:length(bmesh)
+        α, bm = points[i].len, bmesh[i]
+        bond_color = α < 0.5 ? color_func(atom_id1) : color_func(atom_id2)
+        if bo == 3//2
+            push!(meshes, dashed_bmesh(bm))
+            push!(colors, bond_color)
+        elseif bo == 2//1
+            append!(meshes, split_bmesh(bm, 2))
+            append!(colors, fill(bond_color, 2))
+        elseif bo == 3//1
+            append!(meshes, split_bmesh(bm, 3))
+            append!(colors, fill(bond_color, 3))
+        else
+            push!(meshes, bm)
+            push!(colors, bond_color)
+        end
+    end
+
+    return normal_mesh.(meshes), colors
 end
 
 function separate_points(s::AbstractSystem, atom_id1::Integer, atom_id2::Integer)
@@ -267,7 +344,11 @@ function line_bewteen!(axis, p1, p2)
 end
 
 function Cylinder(p1::Vector{<:AbstractFloat}, p2::Vector{<:AbstractFloat}, radius::AbstractFloat)
-    return Cylinder(Point{3, Float64}(p1), Point{3, Float64}(p2), radius)
+    return Cylinder(Point{3, Float32}(p1), Point{3, Float32}(p2), Float32(radius))
+end
+
+function color_scheme(value::AbstractFloat; scheme=:viridis)
+    return "#" * hex(get(colorschemes[scheme], value))
 end
 
 
