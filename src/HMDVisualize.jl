@@ -27,10 +27,11 @@ const atom_color = Dict(
     "beads"              => "#" * hex(HSL(170/255, 0  /255, 100/255))
 )
 
-#TODO 色情報の渡し方 {default | additional color} and {discrete | colormap}
-# 対象原子の指定方法 + 色指定
-# 原子id => colorant?
-# help functions: sample_colormap(::AbstractFloat; cmap)
+# 色情報にアルファを追加 8桁hex
+# trajectoryの動画出力
+# 投影法
+# 背景色にあわせた色調整
+# マウスイベントによるinspection (特に原子間距離)
 function visualize(s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:Integer, String}=Dict{Int64, String}())
     if dimension(s) != 3
         error("expected dimension 3, found $D")
