@@ -40,48 +40,42 @@ function visualize(traj::AbstractTrajectory{D, F}; add_color::Dict{<:Integer, St
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
-
     wrap_coord = wrapped(traj)
 
     set_color(atom_id, s) = set_color_verbose(atom_id, s, add_color)
-    #set_color(atom_id, s) = begin
-    #    if atom_id ∈ keys(add_color)
-    #        add_color[atom_id]
-    #    else
-    #        atom_color[string(element(s, atom_id))]
-    #    end
-    #end
 
     fig = Figure()
     sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
     axis = LScene(fig[1,1]; show_axis = false)
-    reader = System{D, F, Immutable}()
-#    colors = unique!(set_color.(1:natom(reader)), s)
 
+    reader = System{D, F, Immutable}()
     box_mesh = lift(sl_x.value) do index
         update_reader!(reader, traj, index)
         get_boxmesh(reader)
     end
-    atoms = lift(sl_x.value) do index
-        update_reader!(reader, traj, index)
+    atoms = lift(box_mesh) do stub #lift(sl_x.value) do index
+        #update_reader!(reader, traj, index)
         Point3f.(all_positions(reader))
     end
-    atom_colors = lift(sl_x.value) do index
-        update_reader!(reader, traj, index)
+    atom_colors = lift(box_mesh) do stub #lift(sl_x.value) do index
+        #update_reader!(reader, traj, index)
         [set_color(atom_id, reader) for atom_id in 1:natom(reader)]
     end
-    colors = @lift unique($atom_colors)
-    bmeshes = map(colors[]) do cl
+    colors = map(unique(atom_colors[])) do cl
+        lift(atom_colors) do stub
+            cl
+        end
+    end
+
+    bmeshes = map(colors) do cl
         lift(sl_x.value) do index
             update_reader!(reader, traj, index)
-            get_bondmesh(reader; wrap_coord=wrap_coord, color_func=set_color, color_filter=cl)[1]
+            get_bondmesh(reader; wrap_coord=wrap_coord, color_func=set_color, color_filter=cl[])[1]
         end
     end
 
     meshscatter!(axis, atoms, color=atom_colors, markersize = 0.3)
-    #meshscatter!(axis, atoms, markersize = 0.3)
-    for i in 1:length(colors[])
-        # ここ colorsがobservable{Vector}
+    for i in 1:length(colors)
         mesh!(axis, bmeshes[i]; color=colors[i])
     end
     mesh!(axis, box_mesh)
