@@ -27,6 +27,69 @@ const atom_color = Dict(
     "beads"              => "#" * hex(HSL(170/255, 0  /255, 100/255))
 )
 
+function set_color_verbose(atom_id::Integer, s::AbstractSystem, add_color::Dict{<:Integer, String})
+    if atom_id ∈ keys(add_color)
+        return add_color[atom_id]
+    else
+        return atom_color[string(element(s, atom_id))]
+    end
+end
+
+
+function visualize(traj::AbstractTrajectory{D, F}; add_color::Dict{<:Integer, String}=Dict{Int64, String}()) where {D, F<:AbstractFloat}
+    if dimension(traj[1]) != 3
+        error("expected dimension 3, found $D")
+    end
+
+    wrap_coord = wrapped(traj)
+
+    set_color(atom_id, s) = set_color_verbose(atom_id, s, add_color)
+    #set_color(atom_id, s) = begin
+    #    if atom_id ∈ keys(add_color)
+    #        add_color[atom_id]
+    #    else
+    #        atom_color[string(element(s, atom_id))]
+    #    end
+    #end
+
+    fig = Figure()
+    sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
+    axis = LScene(fig[1,1]; show_axis = false)
+    reader = System{D, F, Immutable}()
+#    colors = unique!(set_color.(1:natom(reader)), s)
+
+    box_mesh = lift(sl_x.value) do index
+        update_reader!(reader, traj, index)
+        get_boxmesh(reader)
+    end
+    atoms = lift(sl_x.value) do index
+        update_reader!(reader, traj, index)
+        Point3f.(all_positions(reader))
+    end
+    atom_colors = lift(sl_x.value) do index
+        update_reader!(reader, traj, index)
+        [set_color(atom_id, reader) for atom_id in 1:natom(reader)]
+    end
+    colors = @lift unique($atom_colors)
+    bmeshes = map(colors[]) do cl
+        lift(sl_x.value) do index
+            update_reader!(reader, traj, index)
+            get_bondmesh(reader; wrap_coord=wrap_coord, color_func=set_color, color_filter=cl)[1]
+        end
+    end
+
+    meshscatter!(axis, atoms, color=atom_colors, markersize = 0.3)
+    #meshscatter!(axis, atoms, markersize = 0.3)
+    for i in 1:length(colors[])
+        # ここ colorsがobservable{Vector}
+        mesh!(axis, bmeshes[i]; color=colors[i])
+    end
+    mesh!(axis, box_mesh)
+
+    return fig
+end
+# precompile(f, (Int,))
+
 # 色情報にアルファを追加 8桁hex
 # trajectoryの動画出力
 # 投影法
@@ -46,61 +109,52 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:
         changed = true
     end
 
-    f = Figure()
-    axis = LScene(f[1,1]; show_axis = false
-            #xticksvisible = false,
-            #yticksvisible = false,
-            #zticksvisible = false,
-            #xticklabelsvisible = false,
-            #yticklabelsvisible = false,
-            #zticklabelsvisible = false,
-            #xgridvisible = false,
-            #ygridvisible = false,
-            #zgridvisible = false,
-            #aspect = :data,
-            #viewmode = :fit
-    )
-
-    render_box!(axis, s)
-
-    #mmeshを1つに結合する方法を調べる geometrybasics
-    #for (pos, e) in zip(all_positions(s), all_elements(s))
-    #    meshscatter!(axis, pos
-    #                color = atom_color[string(e)],
-    #                markersize = 0.3
-    #    )
+    set_color(atom_id, s) = set_color(atom_id, s, add_color)
+    #set_color(atom_id) = begin
+    #    if atom_id ∈ keys(add_color)
+    #        add_color[atom_id]
+    #    else
+    #        atom_color[string(element(s, atom_id))]
+    #    end
     #end
-    set_color(atom_id) = begin
-        if atom_id ∈ keys(add_color)
-            add_color[atom_id]
-        else
-            atom_color[string(element(s, atom_id))]
-        end
-    end
-    meshscatter!(axis, Point3f.(all_positions(s)), color=set_color.(1:natom(s)), markersize = 0.3)
 
-    # mesh単位でメタデータ新納情報を持たせ、プロット直前にatomともmerge
-    bmesh = [normal_mesh(Cylinder(zeros(3), ones(3), 0.15))] |> empty
-    colors = String[]
-    for (edge, n) in zip(edges(topology(s)), 1:nbond(s))
-        atom_id1, atom_id2 = src(edge), dst(edge)
-        #render_bond!(axis, s, atom_id1, atom_id2; radius=0.15, wrap_coord=wrap_coord)
-        bm, each_color = bond_mesh(s, atom_id1, atom_id2; radius=0.15, wrap_coord=wrap_coord, color_func=set_color)
-        append!(bmesh, bm)
-        append!(colors, each_color)
-    end
+    box_mesh = get_boxmesh(s)
+    bmesh, colors = get_bondmesh(s; wrap_coord=wrap_coord, set_color=set_color)
+
+    fig = Figure()
+    axis = LScene(fig[1,1]; show_axis = false)
+    meshscatter!(axis, Point3f.(all_positions(s)), color=set_color.(1:natom(s), s), markersize = 0.3)
     for cl in unique(colors)
         color_mesh = [bmesh[i] for i in 1:length(colors) if colors[i] == cl]
         mesh!(axis, merge(color_mesh); color=cl)
     end
-    
+    mesh!(axis, box_mesh)
+
     if changed && wrapped(s)
         unwrap!(s)
     elseif changed && !wrapped(s)
         wrap!(s)
     end
 
-    return f
+    return fig
+end
+
+#function visualize!(fig::Figure, s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:Integer, String}=Dict{Int64, String}())
+function get_bondmesh(s::AbstractSystem; wrap_coord::Bool=false, color_func::Function, color_filter::String="")
+    bmesh = [normal_mesh(Cylinder(zeros(3), ones(3), 0.15))] |> empty
+    colors = String[]
+    for edge in edges(topology(s))
+        atom_id1, atom_id2 = src(edge), dst(edge)
+        bm, each_color = bond_mesh(s, atom_id1, atom_id2; radius=0.15, wrap_coord=wrap_coord, color_func=color_func)
+        append!(bmesh, bm)
+        append!(colors, each_color)
+    end
+
+    if isempty(color_filter)
+        return bmesh, colors
+    else
+        return merge([bmesh[i] for i in 1:length(bmesh) if colors[i]==color_filter]), colors
+    end
 end
 
 function render_bond!(axis, s::AbstractSystem, atom_id1::Integer, atom_id2::Integer; radius::AbstractFloat, wrap_coord::Bool)
@@ -115,12 +169,6 @@ function render_bond!(axis, s::AbstractSystem, atom_id1::Integer, atom_id2::Inte
     # 始点と終点を追加
     push!(points, (len=0.0, point=position(s, atom_id1), jump=false))
     push!(points, (len=1.0, point=position(s, atom_id2), jump=false))
-
-    #println("$(norm(points[1].point .- points[end].point))")
-    #for p in points
-    #    println("   $(p.len) $(p.point)")
-    #end
-    #println()
 
     # 色分けのため中点を追加
     push!(points, (len=0.5, point=zeros(3), jump=false))
@@ -179,12 +227,6 @@ function bond_mesh(s::AbstractSystem, atom_id1::Integer, atom_id2::Integer; radi
     push!(points, (len=0.0, point=position(s, atom_id1), jump=false))
     push!(points, (len=1.0, point=position(s, atom_id2), jump=false))
 
-    #println("$(norm(points[1].point .- points[end].point))")
-    #for p in points
-    #    println("   $(p.len) $(p.point)")
-    #end
-    #println()
-
     # 色分けのため中点を追加
     push!(points, (len=0.5, point=zeros(3), jump=false))
     sort!(points, by=tuple->tuple[1]) # sort by α
@@ -210,7 +252,7 @@ function bond_mesh(s::AbstractSystem, atom_id1::Integer, atom_id2::Integer; radi
     colors = String[]
     for i in 1:length(bmesh)
         α, bm = points[i].len, bmesh[i]
-        bond_color = α < 0.5 ? color_func(atom_id1) : color_func(atom_id2)
+        bond_color = α < 0.5 ? color_func(atom_id1, s) : color_func(atom_id2, s)
         if bo == 3//2
             push!(meshes, dashed_bmesh(bm))
             push!(colors, bond_color)
@@ -318,25 +360,38 @@ function dashed_bmesh(bmesh::Cylinder3)
     bmesh
 end
 
-function render_box!(axis, s)
+function get_boxmesh(s)
     a, b, c = box(s).axis[:,1], box(s).axis[:,2], box(s).axis[:,3]
     s_origin = box(s).origin
-    p(i, j, k) = s_origin .+ (i .* a) .+ (j .* b) .+ (k .* c)
+    p(i, j, k) = Point{3, Float32}(s_origin .+ (i .* a) .+ (j .* b) .+ (k .* c))
 
-    line_bewteen!(axis, p(0,0,0), p(0,1,0))
-    line_bewteen!(axis, p(0,0,0), p(1,0,0))
-    line_bewteen!(axis, p(0,1,0), p(1,1,0))
-    line_bewteen!(axis, p(1,0,0), p(1,1,0))
-    line_bewteen!(axis, p(0,0,1), p(0,1,1))
-    line_bewteen!(axis, p(0,0,1), p(1,0,1))
-    line_bewteen!(axis, p(0,1,1), p(1,1,1))
-    line_bewteen!(axis, p(1,0,1), p(1,1,1))
-    line_bewteen!(axis, p(0,0,0), p(0,0,1))
-    line_bewteen!(axis, p(1,0,0), p(1,0,1))
-    line_bewteen!(axis, p(0,1,0), p(0,1,1))
-    line_bewteen!(axis, p(1,1,0), p(1,1,1))
+    #line_bewteen!(axis, p(0,0,0), p(0,1,0))
+    #line_bewteen!(axis, p(0,0,0), p(1,0,0))
+    #line_bewteen!(axis, p(0,1,0), p(1,1,0))
+    #line_bewteen!(axis, p(1,0,0), p(1,1,0))
+    #line_bewteen!(axis, p(0,0,1), p(0,1,1))
+    #line_bewteen!(axis, p(0,0,1), p(1,0,1))
+    #line_bewteen!(axis, p(0,1,1), p(1,1,1))
+    #line_bewteen!(axis, p(1,0,1), p(1,1,1))
+    #line_bewteen!(axis, p(0,0,0), p(0,0,1))
+    #line_bewteen!(axis, p(1,0,0), p(1,0,1))
+    #line_bewteen!(axis, p(0,1,0), p(0,1,1))
+    #line_bewteen!(axis, p(1,1,0), p(1,1,1))
 
-    return nothing
+    return merge(normal_mesh.([
+        Cylinder(p(0,0,0), p(0,1,0), Float32(0.06)),
+        Cylinder(p(0,0,0), p(1,0,0), Float32(0.06)),
+        Cylinder(p(0,1,0), p(1,1,0), Float32(0.06)),
+        Cylinder(p(1,0,0), p(1,1,0), Float32(0.06)),
+        Cylinder(p(0,0,1), p(0,1,1), Float32(0.06)),
+        Cylinder(p(0,0,1), p(1,0,1), Float32(0.06)),
+        Cylinder(p(0,1,1), p(1,1,1), Float32(0.06)),
+        Cylinder(p(1,0,1), p(1,1,1), Float32(0.06)),
+        Cylinder(p(0,0,0), p(0,0,1), Float32(0.06)),
+        Cylinder(p(1,0,0), p(1,0,1), Float32(0.06)),
+        Cylinder(p(0,1,0), p(0,1,1), Float32(0.06)),
+        Cylinder(p(1,1,0), p(1,1,1), Float32(0.06))
+    ]))
 end
 
 function line_bewteen!(axis, p1, p2)
