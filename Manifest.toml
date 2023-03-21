@@ -2,7 +2,7 @@
 
 julia_version = "1.8.4"
 manifest_format = "2.0"
-project_hash = "1d8642b42b3a94a480ac220a63d3ba5d82e1f9b6"
+project_hash = "404147cada732d4ed591dc43d0a387952bafc64c"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -417,7 +417,7 @@ version = "0.1.0"
 
 [[deps.HMDPolymer]]
 deps = ["Distributions", "ForwardDiff", "Graphs", "HMD", "LinearAlgebra", "Match", "MetaGraphs", "PeriodicTable", "Quaternions", "Random", "SimpleWeightedGraphs", "StaticArrays"]
-git-tree-sha1 = "e2a5808ed45c81d09d66782ff0e602ef9a57e808"
+git-tree-sha1 = "1d4704edf1a2b94b8c97e5fb91ec6d759c7b1b17"
 repo-rev = "master"
 repo-url = "../HMDPolymer"
 uuid = "05be8bd0-70da-4712-87fe-3751d6f4b525"

@@ -24,7 +24,7 @@ const atom_color = Dict(
     elements[:Si].symbol => "#" * hex(HSL(10 /255, 100/255, 190/255)),
     elements[:S ].symbol => "#" * hex(HSL(38 /255, 208/255, 145/255)),
     elements[:Cl].symbol => "#" * hex(HSL(113/255, 124/255, 145/255)),
-    "beads"              => "#" * hex(HSL(170/255, 0  /255, 100/255))
+    "bd"                 => "#" * hex(HSL(170/255, 0  /255, 100/255))
 )
 
 function set_color_verbose(atom_id::Integer, s::AbstractSystem, add_color::Dict{<:Integer, String})
@@ -36,6 +36,7 @@ function set_color_verbose(atom_id::Integer, s::AbstractSystem, add_color::Dict{
 end
 
 
+# TODO: parse-ortho, axis reset, movie button, raytracing
 function visualize(traj::AbstractTrajectory{D, F}; add_color::Dict{<:Integer, String}=Dict{Int64, String}()) where {D, F<:AbstractFloat}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
@@ -47,6 +48,7 @@ function visualize(traj::AbstractTrajectory{D, F}; add_color::Dict{<:Integer, St
     fig = Figure()
     sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
     axis = LScene(fig[1,1]; show_axis = false)
+    cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0)
 
     reader = System{D, F, Immutable}()
     box_mesh = lift(sl_x.value) do index
@@ -103,7 +105,7 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:
         changed = true
     end
 
-    set_color(atom_id, s) = set_color(atom_id, s, add_color)
+    set_color(atom_id, s) = set_color_verbose(atom_id, s, add_color)
     #set_color(atom_id) = begin
     #    if atom_id ∈ keys(add_color)
     #        add_color[atom_id]
@@ -112,17 +114,19 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:
     #    end
     #end
 
-    box_mesh = get_boxmesh(s)
-    bmesh, colors = get_bondmesh(s; wrap_coord=wrap_coord, set_color=set_color)
-
     fig = Figure()
     axis = LScene(fig[1,1]; show_axis = false)
-    meshscatter!(axis, Point3f.(all_positions(s)), color=set_color.(1:natom(s), s), markersize = 0.3)
+    cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.1f0)
+    #zoom!(axis.scene, 100)
+    #update_cam!(axis.scene)
+
+    colors = [set_color(i, s) for i in 1:natom(s)]
+    meshscatter!(axis, Point3f.(all_positions(s)), color=colors, markersize = 0.3)
+    mesh!(axis, get_boxmesh(s))
     for cl in unique(colors)
-        color_mesh = [bmesh[i] for i in 1:length(colors) if colors[i] == cl]
-        mesh!(axis, merge(color_mesh); color=cl)
+        color_mesh = get_bondmesh(s; wrap_coord=wrap_coord, color_func=set_color, color_filter=cl)[1]
+        mesh!(axis, color_mesh; color=cl)
     end
-    mesh!(axis, box_mesh)
 
     if changed && wrapped(s)
         unwrap!(s)
