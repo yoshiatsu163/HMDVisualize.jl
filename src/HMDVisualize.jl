@@ -35,7 +35,6 @@ function set_color_verbose(atom_id::Integer, s::AbstractSystem, add_color::Dict{
     end
 end
 
-
 # TODO: parse-ortho, axis reset, movie button, raytracing
 function visualize(traj::AbstractTrajectory{D, F}; add_color::Dict{<:Integer, String}=Dict{Int64, String}()) where {D, F<:AbstractFloat}
     if dimension(traj[1]) != 3
@@ -403,6 +402,15 @@ end
 
 function color_scheme(value::AbstractFloat; scheme=:viridis)
     return "#" * hex(get(colorschemes[scheme], value))
+end
+
+function update_reader!(reader, traj, index)
+    import_dynamic!(reader, traj, index)
+    if is_reaction(traj, index)
+        import_static!(reader, traj, index)
+    end
+
+    return nothing
 end
 
 
