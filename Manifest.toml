@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.4"
+julia_version = "1.8.5"
 manifest_format = "2.0"
 project_hash = "404147cada732d4ed591dc43d0a387952bafc64c"
 
@@ -416,8 +416,8 @@ uuid = "34459d71-a401-4179-84fe-d472190a053e"
 version = "0.1.0"
 
 [[deps.HMDPolymer]]
-deps = ["Distributions", "ForwardDiff", "Graphs", "HMD", "LinearAlgebra", "Match", "MetaGraphs", "PeriodicTable", "Quaternions", "Random", "SimpleWeightedGraphs", "StaticArrays"]
-git-tree-sha1 = "1d4704edf1a2b94b8c97e5fb91ec6d759c7b1b17"
+deps = ["Distributions", "ForwardDiff", "Graphs", "HMD", "LinearAlgebra", "Match", "PeriodicTable", "Quaternions", "Random", "Reexport", "SimpleWeightedGraphs", "StaticArrays", "Statistics", "Unitful"]
+git-tree-sha1 = "58f516e478daaaa9d1738544e931c7cc24b28584"
 repo-rev = "master"
 repo-url = "../HMDPolymer"
 uuid = "05be8bd0-70da-4712-87fe-3751d6f4b525"

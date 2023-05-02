@@ -6,6 +6,7 @@ using ColorSchemes: colorschemes, get
 using GeometryBasics
 using Graphs
 using HMD
+using HMDPolymer
 using LinearAlgebra
 #using MakieCore
 using GLMakie #cite
@@ -16,70 +17,85 @@ import GeometryBasics: Cylinder
 export visualize, color_scheme
 
 const atom_color = Dict(
-    elements[:H ].symbol => "#" * hex(HSL(170/255, 0  /255, 240/255)),
-    elements[:C ].symbol => "#" * hex(HSL(170/255, 0  /255, 100/255)),
-    elements[:N ].symbol => "#" * hex(HSL(170/255, 75 /255, 150/255)),
-    elements[:O ].symbol => "#" * hex(HSL(0  /255, 75 /255, 150/255)),
-    elements[:F ].symbol => "#" * hex(HSL(80 /255, 75 /255, 150/255)),
-    elements[:Si].symbol => "#" * hex(HSL(10 /255, 100/255, 190/255)),
-    elements[:S ].symbol => "#" * hex(HSL(38 /255, 208/255, 145/255)),
-    elements[:Cl].symbol => "#" * hex(HSL(113/255, 124/255, 145/255)),
-    "bd"                 => "#" * hex(HSL(170/255, 0  /255, 100/255))
+    elements[:H ].number => "#" * hex(HSL(170/255, 0  /255, 240/255)),
+    elements[:C ].number => "#" * hex(HSL(170/255, 0  /255, 100/255)),
+    elements[:N ].number => "#" * hex(HSL(170/255, 75 /255, 150/255)),
+    elements[:O ].number => "#" * hex(HSL(0  /255, 75 /255, 150/255)),
+    elements[:F ].number => "#" * hex(HSL(80 /255, 75 /255, 150/255)),
+    elements[:Si].number => "#" * hex(HSL(10 /255, 100/255, 190/255)),
+    elements[:S ].number => "#" * hex(HSL(38 /255, 208/255, 145/255)),
+    elements[:Cl].number => "#" * hex(HSL(113/255, 124/255, 145/255))
 )
 
 function set_color_verbose(atom_id::Integer, s::AbstractSystem, add_color::Dict{<:Integer, String})
     if atom_id ∈ keys(add_color)
         return add_color[atom_id]
     else
-        return atom_color[string(element(s, atom_id))]
+        if element(s, atom_id) < 1
+            return "#" * hex(HSL(170/255, 0  /255, 100/255))
+        else
+            return atom_color[element(s, atom_id)]
+        end
+    end
+end
+
+function default_color(s::AbstractSystem, atom_id::Integer)
+    elem = element(s, atom_id)
+    return if elem >= 1
+        atom_color[elem]
+    else
+        "#" * hex(HSL(170/255, 0/255, 100/255))
     end
 end
 
 # TODO: parse-ortho, axis reset, movie button, raytracing
-function visualize(traj::AbstractTrajectory{D, F}; add_color::Dict{<:Integer, String}=Dict{Int64, String}()) where {D, F<:AbstractFloat}
+# 色は関数で渡す．folor_func=default_color(atom_id)
+function visualize(traj::AbstractTrajectory{D, F}; color_func::Function=default_color, animfile::AbstractString="") where {D, F<:AbstractFloat}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
     wrap_coord = wrapped(traj)
-
-    set_color(atom_id, s) = set_color_verbose(atom_id, s, add_color)
 
     fig = Figure()
     sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
     axis = LScene(fig[1,1]; show_axis = false)
     cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0)
 
-    reader = System{D, F, Immutable}()
+    reader = similar_system(traj)
     box_mesh = lift(sl_x.value) do index
         update_reader!(reader, traj, index)
         get_boxmesh(reader)
     end
-    atoms = lift(box_mesh) do stub #lift(sl_x.value) do index
-        #update_reader!(reader, traj, index)
+    atoms = lift(box_mesh) do stub
         Point3f.(all_positions(reader))
     end
-    atom_colors = lift(box_mesh) do stub #lift(sl_x.value) do index
-        #update_reader!(reader, traj, index)
-        [set_color(atom_id, reader) for atom_id in 1:natom(reader)]
-    end
-    colors = map(unique(atom_colors[])) do cl
-        lift(atom_colors) do stub
-            cl
-        end
-    end
+    #colors = map(unique(atom_colors[])) do cl
+    #    lift(atom_colors) do stub
+    #        cl
+    #    end
+    #end
+    atom_colors = [color_func(reader, atom_id) for atom_id in 1:natom(reader)]
+    colors = unique(atom_colors)
 
-    bmeshes = map(colors) do cl
-        lift(sl_x.value) do index
-            update_reader!(reader, traj, index)
-            get_bondmesh(reader; wrap_coord=wrap_coord, color_func=set_color, color_filter=cl[])[1]
+    #bmeshes = map(colors) do cl
+    bmeshes =   lift(box_mesh) do index
+            #update_reader!(reader, traj, index)
+            get_bondmesh(reader; wrap_coord=wrap_coord, color_func=color_func)[1]
         end
-    end
+    #end
 
     meshscatter!(axis, atoms, color=atom_colors, markersize = 0.3)
     for i in 1:length(colors)
-        mesh!(axis, bmeshes[i]; color=colors[i])
+    #    mesh!(axis, bmeshes[i]; color=colors[i])
     end
     mesh!(axis, box_mesh)
+
+    if !isempty(animfile)
+        println("Recording to $animfile")
+        record(fig, animfile, 1:length(traj); format="mp4", compression=0, framerate=30, profile="high444") do i
+            sl_x.value = i
+        end
+    end
 
     return fig
 end
@@ -137,7 +153,7 @@ function visualize(s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:
 end
 
 #function visualize!(fig::Figure, s::AbstractSystem; wrap_coord::Bool=false, add_color::Dict{<:Integer, String}=Dict{Int64, String}())
-function get_bondmesh(s::AbstractSystem; wrap_coord::Bool=false, color_func::Function, color_filter::String="")
+function get_bondmesh(s::AbstractSystem; wrap_coord::Bool=false, color_func::Function)
     bmesh = [normal_mesh(Cylinder(zeros(3), ones(3), 0.15))] |> empty
     colors = String[]
     for edge in edges(topology(s))
@@ -147,11 +163,10 @@ function get_bondmesh(s::AbstractSystem; wrap_coord::Bool=false, color_func::Fun
         append!(colors, each_color)
     end
 
-    if isempty(color_filter)
-        return bmesh, colors
-    else
-        return merge([bmesh[i] for i in 1:length(bmesh) if colors[i]==color_filter]), colors
-    end
+    #return merge([bmesh[i] for i in 1:length(bmesh) if colors[i]==color_filter]), colors
+    return map(unique(colors)) do cl
+        merge([bmesh[i] for i in 1:length(bmesh) if colors[i]==cl])
+    end, colors
 end
 
 function render_bond!(axis, s::AbstractSystem, atom_id1::Integer, atom_id2::Integer; radius::AbstractFloat, wrap_coord::Bool)
@@ -249,7 +264,7 @@ function bond_mesh(s::AbstractSystem, atom_id1::Integer, atom_id2::Integer; radi
     colors = String[]
     for i in 1:length(bmesh)
         α, bm = points[i].len, bmesh[i]
-        bond_color = α < 0.5 ? color_func(atom_id1, s) : color_func(atom_id2, s)
+        bond_color = α < 0.5 ? color_func(s, atom_id1) : color_func(s, atom_id2)
         if bo == 3//2
             push!(meshes, dashed_bmesh(bm))
             push!(colors, bond_color)
@@ -290,7 +305,7 @@ function separate_points(s::AbstractSystem, atom_id1::Integer, atom_id2::Integer
         plane_origin = b_origin .+ (n[dim] == 1 ? 1.0 : 0.0) .* axis[:,dim]
         (s, t, α) = cross_plane_line(pos1, bond_vector; basis=basis, plane_origin=plane_origin)
         push!(params, (dim, s, t, α))
-        @assert 0.0 < α < 1.0
+        @assert 0.0 < α < 1.0 "$α"
     end
     sort!(params, by=tuple->tuple[4]) # sort by alpha
 
