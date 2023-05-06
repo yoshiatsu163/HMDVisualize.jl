@@ -34,6 +34,9 @@ const atom_color = Dict(
 
 function default_color(s::AbstractSystem, atom_id::Integer)
     elem = element(s, atom_id)
+    if elem ∉ keys(atom_color)
+        error("element $(elements[elem]) is not supported yet. ")
+    end
     return if elem >= 1
         atom_color[elem]
     else
