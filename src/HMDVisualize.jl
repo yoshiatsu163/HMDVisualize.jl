@@ -34,12 +34,9 @@ const atom_color = Dict(
 
 function default_color(s::AbstractSystem, atom_id::Integer)
     elem = element(s, atom_id)
-    if elem ∉ keys(atom_color)
-        error("element $(elements[elem]) is not supported yet. ")
-    end
     return if elem >= 1
         atom_color[elem]
-    else
+    else elem < 0
         (UInt8(170), UInt8(0), UInt8(100))
     end
 end
@@ -54,7 +51,17 @@ include("bond.jl")
 ###### system visualization functions
 ###
 
-function visualize(traj::AbstractTrajectory{D, F}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275, quality::Integer=8) where {D, F<:AbstractFloat}
+function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275, quality::Integer=8) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+    return visualize(
+        Trajectory(s);
+        color_func = color_func,
+        atom_radius = atom_radius,
+        bond_radius = bond_radius,
+        quality = quality
+    )
+end
+
+function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275, quality::Integer=8) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
@@ -94,10 +101,10 @@ function visualize(traj::AbstractTrajectory{D, F}; color_func::Function=default_
             bond_nonpbc(reader, color_func, colors, bond_radius, quality)
         end
     end
-    
+
     meshscatter!(axis, atoms;
         color = atom_colors,
-        markersize = atom_radius
+        markersize = atom_radius*2
     )
     for cl in colors
         c_bonds = @lift $(bonds)[cl]

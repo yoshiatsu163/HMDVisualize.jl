@@ -5,7 +5,7 @@ Base.@kwdef mutable struct BondData
 end
 
 #function add_bdata!(b::BondData, origin::AbstractVector{F}, direction::AbstractVector{F}, radius::F) where {F<:AbstractFloat}
- 
+
 #end
 
 #function add_bdata!(b::BondData, origin::Point3f0, direction::Point3f0, radius::Float32)
@@ -24,7 +24,7 @@ function bondscatter!(axis::LScene, bonds::BondData; color::NTuple{3, UInt8}, bo
     scales = Vec3f[]
     for v in bonds.direction
         l = norm(v)
-        push!(scales, Vec3f(l, l, l))
+        push!(scales, Vec3f(1/l, 1/l, l))
     end
 
     # rotation for `m`
@@ -42,7 +42,7 @@ function bondscatter!(axis::LScene, bonds::Observable{BondData}; color::NTuple{3
     scales = lift(bonds) do stub
         map(bonds[].direction) do v
             l = norm(v)
-            Vec3f(l, l, l)
+            Vec3f(1, 1, l)
         end
     end
 
@@ -135,4 +135,3 @@ function bond_pbc(s::AbstractSystem, color_func::Function, colors::Vector{NTuple
 
     return bonds
 end
-
