@@ -71,7 +71,12 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
     colors = NTuple{3, UInt8}[]
     for reader in traj
         snapshot = reader.reader
-        append!(colors, [color_func(snapshot, atom_id) for atom_id in 1:natom(snapshot) if color_func(snapshot, atom_id) ∉ colors])
+        for atom_id in 1:natom(snapshot)
+            color = color_func(snapshot, atom_id)
+            if color ∉ colors
+                push!(colors, color)
+            end
+        end
     end
 
     fig = Figure()
