@@ -15,21 +15,21 @@ using PeriodicTable
 import GeometryBasics: Cylinder
 import Colors: hex
 
-export visualize, color_scheme
+export visualize, color_scheme, default_color
 
 ###
 ###### preset colors
 ###
 
 const atom_color = Dict(
-    elements[:H ].number => (UInt8(170), UInt8(  0), UInt8(240)),
-    elements[:C ].number => (UInt8(170), UInt8(  0), UInt8(100)),
-    elements[:N ].number => (UInt8(170), UInt8( 75), UInt8(150)),
-    elements[:O ].number => (UInt8(  0), UInt8( 75), UInt8(150)),
-    elements[:F ].number => (UInt8( 80), UInt8( 75), UInt8(150)),
-    elements[:Si].number => (UInt8( 10), UInt8(100), UInt8(190)),
-    elements[:S ].number => (UInt8( 38), UInt8(208), UInt8(145)),
-    elements[:Cl].number => (UInt8(113), UInt8(124), UInt8(145))
+    elements[:H ].number => colorant"hsla(170,   0%,  66%, 1.0)",
+    elements[:C ].number => colorant"hsla(240,  39%,  30%, 1.0)",
+    elements[:N ].number => colorant"hsla(240, 100%,  78%, 1.0)",
+    elements[:O ].number => colorant"hsla( 80,  29%,  58%, 1.0)",
+    elements[:F ].number => colorant"hsla(  0,  29%,  58%, 1.0)",
+    elements[:Si].number => colorant"hsla( 10,  39%,  74%, 1.0)",
+    elements[:S ].number => colorant"hsla(113,  48%,  56%, 1.0)",
+    elements[:Cl].number => colorant"hsla(170,   0%,  94%, 1.0)"
 )
 
 function default_color(s::AbstractSystem, atom_id::Integer)
@@ -37,12 +37,8 @@ function default_color(s::AbstractSystem, atom_id::Integer)
     return if elem >= 1
         atom_color[elem]
     else elem < 0
-        (UInt8(170), UInt8(0), UInt8(100))
+        colorant"hsla(170,  0%, 37%, 1.0)"
     end
-end
-
-function hex(num::NTuple{3, UInt8})
-    return "#" * hex(HSL(num[1]/255, num[2]/255, num[3]/255))
 end
 
 include("bond.jl")
@@ -61,14 +57,17 @@ function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=defaul
     )
 end
 
-function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275, quality::Integer=8) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+# 二重結合，共鳴用のassetsを準備
+# overlayで追加の色指定
+# datainspector
+function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, overlay=nothing, atom_radius::Number=0.3, bond_radius::Number=0.275, quality::Integer=8) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
     wrap_coord = wrapped(traj)
 
     # enumerate all possible colors
-    colors = NTuple{3, UInt8}[]
+    colors = Vector{HSLA{Float32}}(undef, 0)
     for reader in traj
         snapshot = reader.reader
         for atom_id in 1:natom(snapshot)
@@ -79,7 +78,7 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
         end
     end
 
-    fig = Figure()
+    fig = Figure(; backgroundcolor = :black)
     sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
     axis = LScene(fig[1,1]; show_axis = false)
     cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0)
@@ -95,7 +94,7 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
         Point3f.(all_positions(reader))
     end
     atom_colors = lift(box_mesh) do stub
-        [hex(color_func(reader, atom_id)) for atom_id in 1:natom(reader)]
+        [color_func(reader, atom_id) for atom_id in 1:natom(reader)]
     end
 
     # bonds
@@ -107,15 +106,25 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
         end
     end
 
+    inspect_labels = map(1:natom(reader)) do i
+        elem = element(reader, i)
+        p = Float32.(position(reader, i))
+        "id: $i\n\
+        element: $(elements[elem].symbol)\n\
+        x: $(p[1])\n\
+        y: $(p[2])\n\
+        z: $(p[3])"
+    end
     meshscatter!(axis, atoms;
         color = atom_colors,
-        markersize = atom_radius*2
+        markersize = atom_radius*2,
+        inspector_label = (self, i, p) -> inspect_labels[i]
     )
     for cl in colors
         c_bonds = @lift $(bonds)[cl]
         bondscatter!(axis, c_bonds; color=cl, bond_radius=bond_radius, quality=quality)
     end
-    mesh!(axis, box_mesh)
+    mesh!(axis, box_mesh; color = :white)
 
     return fig
 end
