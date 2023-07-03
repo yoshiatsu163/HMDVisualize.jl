@@ -22,14 +22,15 @@ export visualize, color_scheme, default_color
 ###
 
 const atom_color = Dict(
-    elements[:H ].number => colorant"hsla(170,   0%,  66%, 1.0)",
-    elements[:C ].number => colorant"hsla(240,  39%,  30%, 1.0)",
-    elements[:N ].number => colorant"hsla(240, 100%,  78%, 1.0)",
-    elements[:O ].number => colorant"hsla( 80,  29%,  58%, 1.0)",
-    elements[:F ].number => colorant"hsla(  0,  29%,  58%, 1.0)",
-    elements[:Si].number => colorant"hsla( 10,  39%,  74%, 1.0)",
-    elements[:S ].number => colorant"hsla(113,  48%,  56%, 1.0)",
-    elements[:Cl].number => colorant"hsla(170,   0%,  94%, 1.0)"
+    elements[:H ].number => colorant"hsla(  0,   0%,  90%, 1.0)",
+    elements[:C ].number => colorant"hsla(249,  14%,  70%, 1.0)",
+    elements[:N ].number => colorant"hsla(240,  70%,  78%, 1.0)",
+    elements[:O ].number => colorant"hsla(351,  95%,  70%, 1.0)",
+    elements[:F ].number => colorant"hsla( 95,  40%,  50%, 1.0)",
+    elements[:Si].number => colorant"hsla( 20,  39%,  74%, 1.0)",
+    elements[:S ].number => colorant"hsla( 41,  95%,  59%, 1.0)",
+    elements[:Cl].number => colorant"hsla(158,  79%,  42%, 1.0)",
+    elements[:Br].number => colorant"hsla(  0,  60%,  36%, 1.0)"
 )
 
 function default_color(s::AbstractSystem, atom_id::Integer)
@@ -58,9 +59,7 @@ function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=defaul
 end
 
 # 二重結合，共鳴用のassetsを準備
-# overlayで追加の色指定
-# datainspector
-function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, overlay=nothing, atom_radius::Number=0.3, bond_radius::Number=0.275, quality::Integer=8) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
@@ -129,26 +128,6 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
     return fig
 end
 
-function split_bmesh(bmesh::Cylinder3, order::Integer)
-    @assert order ∈ [2,3]
-    o = origin(bmesh)
-    e = extremity(bmesh)
-    radius = radius(bmesh)
-
-    if order == 2
-        offset = (radius / 3) .* [1.0, 0.0, 0.0]
-        return [Cylinder(o .+ offset, e .+ offset, radius / 6),
-                Cylinder(o .- offset, e .- offset, radius / 6)
-        ]
-    elseif order == 3
-        offset = (0.4 * radius) .* [1.0, 0.0, 0.0]
-        return [Cylinder(o .+ offset, e .+ offset, radius / 5),
-                Cylinder(o          , e          , radius / 5),
-                Cylinder(o .+ offset, e .+ offset, radius / 5)
-        ]
-    end
-end
-
 function get_boxmesh(s)
     a, b, c = box(s).axis[:,1], box(s).axis[:,2], box(s).axis[:,3]
     s_origin = box(s).origin
@@ -189,7 +168,7 @@ function line_bewteen!(axis, p1, p2)
 end
 
 function color_scheme(value::AbstractFloat; scheme=:viridis)
-    return "#" * hex(get(colorschemes[scheme], value))
+    return HSLA{Float32}(get(colorschemes[scheme], value))
 end
 
 function update_reader!(reader, traj, index)

@@ -15,7 +15,7 @@ function add_bdata!(b::BondData, origin::AbstractVector{F}, direction::AbstractV
     push!(b.radius, radius)
 end
 
-function bondscatter!(axis::LScene, bonds::BondData; color::HSLA{Float32}, bond_radius::Number, quality::Integer)
+function bondscatter!(axis::LScene, bonds::BondData; color::HSLA{Float32}, bond_radius::Number)
     # bond mesh template
     # origin, extremity, radius1, radius2, segments
     m = Makie._mantle(Point3f(zeros(3)), Point3f((0,0,1)), bond_radius, bond_radius, quality)
@@ -33,7 +33,7 @@ function bondscatter!(axis::LScene, bonds::BondData; color::HSLA{Float32}, bond_
     meshscatter!(axis, bonds.origin; rotation = rots, markersize = scales, color = color, marker = m)
 end
 
-function bondscatter!(axis::LScene, bonds::Observable{BondData}; color::HSLA{Float32}, bond_radius::Number, quality::Integer)
+function bondscatter!(axis::LScene, bonds::Observable{BondData}; color::HSLA{Float32}, bond_radius::Number)
     # bond mesh template
     # origin, extremity, radius1, radius2, segments
     m = Makie._mantle(Point3f(zeros(3)), Point3f((0,0,1)), bond_radius, bond_radius, quality)
@@ -58,11 +58,7 @@ function bondscatter!(axis::LScene, bonds::Observable{BondData}; color::HSLA{Flo
     meshscatter!(axis, points; rotation = rots, markersize = scales, color = color, marker = m)
 end
 
-function bondscatter2!(axis::LScene, bonds::Observable{BondData}; color::Vector{HSLA{Float32}}, bond_radius::Number, quality::Integer)
-
-end
-
-function bond_nonpbc(s::AbstractSystem, color_func::Function, colors::Vector{HSLA{Float32}}, bond_radius::Number, quality::Integer)
+function bond_nonpbc(s::AbstractSystem, color_func::Function, colors::Vector{HSLA{Float32}}, bond_radius::Number)
     if wrapped(s)
         error("bond_nonpbc does not support wrapped system. Use bond_pbc instead.")
     end
@@ -85,7 +81,7 @@ function bond_nonpbc(s::AbstractSystem, color_func::Function, colors::Vector{HSL
     return bonds
 end
 
-function bond_pbc(s::AbstractSystem, color_func::Function, colors::Vector{HSLA{Float32}}, bond_radius::Number, quality::Integer)
+function bond_pbc(s::AbstractSystem, color_func::Function, colors::Vector{HSLA{Float32}}, bond_radius::Number)
     if !wrapped(s)
         error("bond_pbc does not support non-wrapped system. Use bond_nonpbc instead.")
     end
