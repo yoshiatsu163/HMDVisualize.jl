@@ -8,14 +8,13 @@ using Graphs
 using HMD
 using HMDPolymer
 using LinearAlgebra
-#using MakieCore
+using LoopVectorization
+using MLStyle
 using GLMakie #cite
 using PeriodicTable
+using Printf
 
-import GeometryBasics: Cylinder
-import Colors: hex
-
-export visualize, color_scheme, default_color
+export visualize, color_scheme, default_color, atom_color
 
 ###
 ###### preset colors
@@ -23,7 +22,7 @@ export visualize, color_scheme, default_color
 
 const atom_color = Dict(
     elements[:H ].number => colorant"hsla(  0,   0%,  90%, 1.0)",
-    elements[:C ].number => colorant"hsla(249,  14%,  70%, 1.0)",
+    elements[:C ].number => colorant"hsla(249,  14%,  60%, 1.0)",
     elements[:N ].number => colorant"hsla(240,  70%,  78%, 1.0)",
     elements[:O ].number => colorant"hsla(351,  95%,  70%, 1.0)",
     elements[:F ].number => colorant"hsla( 95,  40%,  50%, 1.0)",
@@ -42,23 +41,22 @@ function default_color(s::AbstractSystem, atom_id::Integer)
     end
 end
 
+include("assets/bonds.jl")
 include("bond.jl")
 
 ###
 ###### system visualization functions
 ###
 
-function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275, quality::Integer=8) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     return visualize(
         Trajectory(s);
         color_func = color_func,
         atom_radius = atom_radius,
-        bond_radius = bond_radius,
-        quality = quality
+        bond_radius = bond_radius
     )
 end
 
-# 二重結合，共鳴用のassetsを準備
 function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
@@ -66,16 +64,16 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
     wrap_coord = wrapped(traj)
 
     # enumerate all possible colors
-    colors = Vector{HSLA{Float32}}(undef, 0)
-    for reader in traj
-        snapshot = reader.reader
-        for atom_id in 1:natom(snapshot)
-            color = color_func(snapshot, atom_id)
-            if color ∉ colors
-                push!(colors, color)
-            end
-        end
-    end
+    #colors = Vector{HSLA{Float32}}(undef, 0)
+    #for reader in traj
+    #    snapshot = reader.reader
+    #    for atom_id in 1:natom(snapshot)
+    #        color = color_func(snapshot, atom_id)
+    #        if color ∉ colors
+    #            push!(colors, color)
+    #        end
+    #    end
+    #end
 
     fig = Figure(; backgroundcolor = :black)
     sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
@@ -84,46 +82,55 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
 
     reader = similar_system(traj)
 
-    # box and atoms
+    # box plot
     box_mesh = lift(sl_x.value) do index
         update_reader!(reader, traj, index)
         get_boxmesh(reader)
     end
+    mesh!(axis, box_mesh; color = :white)
+
+    # atom plot
     atoms = lift(box_mesh) do stub
         Point3f.(all_positions(reader))
     end
     atom_colors = lift(box_mesh) do stub
         [color_func(reader, atom_id) for atom_id in 1:natom(reader)]
     end
-
-    # bonds
-    bonds = lift(box_mesh) do stub
-        if wrapped(traj)
-            bond_pbc(reader, color_func, colors, bond_radius, quality)
-        else
-            bond_nonpbc(reader, color_func, colors, bond_radius, quality)
-        end
-    end
-
     inspect_labels = map(1:natom(reader)) do i
+        p = position(reader, i)
         elem = element(reader, i)
-        p = Float32.(position(reader, i))
+        elem = if elem in 1:length(elements)
+            string(elements[elem].symbol)
+        else
+            string(elem)
+        end
+        x = @sprintf("%6f", p[1])
+        y = @sprintf("%6f", p[2])
+        z = @sprintf("%6f", p[3])
         "id: $i\n\
-        element: $(elements[elem].symbol)\n\
-        x: $(p[1])\n\
-        y: $(p[2])\n\
-        z: $(p[3])"
+        element: $(elem)\n\
+        x: $(x)\n\
+        y: $(y)\n\
+        z: $(z)"
     end
     meshscatter!(axis, atoms;
         color = atom_colors,
         markersize = atom_radius*2,
         inspector_label = (self, i, p) -> inspect_labels[i]
     )
-    for cl in colors
-        c_bonds = @lift $(bonds)[cl]
-        bondscatter!(axis, c_bonds; color=cl, bond_radius=bond_radius, quality=quality)
+
+    # bonds plot
+    bonds = lift(box_mesh) do stub
+        if wrapped(traj)
+            bond_pbc(reader, color_func)
+        else
+            bond_nonpbc(reader, color_func)
+        end
     end
-    mesh!(axis, box_mesh; color = :white)
+    for bondtype in keys(bonds[])
+        bonds_typed = @lift $(bonds)[bondtype]
+        bondscatter!(axis, bonds_typed, bond_radius, _bond_marker(bondtype))
+    end
 
     return fig
 end

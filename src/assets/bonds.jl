@@ -3,6 +3,7 @@ const _Single_Radius = 1.0
 const _Double_Radius = 1/3
 const _Triple_Radius = 1/5
 
+# origin, extremity, radius1, radius2, segments
 const Single_Bond = Makie._mantle(Point3f(zeros(3)), Point3f(0,0,1), _Single_Radius, _Single_Radius, _Bond_Quality)
 
 const Double_Bond = begin
@@ -19,8 +20,11 @@ const Triple_Bond = begin
 end
 
 const Aromatic_Bond = begin
-    # 点線？
-    m1 = Makie._mantle(Point3f(zeros(3)), Point3f((0,0,1)), _Bond_Radius, _Bond_Radius, _Bond_Quality)
-    m2 = Makie._mantle(Point3f(zeros(3)), Point3f((0,0,1)), _Bond_Radius, _Bond_Radius, _Bond_Quality)
-    merge([m1, m2])
+    m = Makie._mantle(Point3f(0.5, 0.0, 0.0), Point3f(0.5, 0, 1), 0.5, 0.5, _Bond_Quality)
+    interval = [(0, 1/3), (2/3, 1)]
+    dots = [
+        Makie._mantle(Point3f(-3/4, 0.0, start), Point3f(-3/4, 0, finish), 0.25, 0.25, _Bond_Quality)
+        for (start, finish) in interval
+    ]
+    merge([m, dots...])
 end
