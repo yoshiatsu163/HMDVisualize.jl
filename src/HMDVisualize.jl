@@ -48,7 +48,7 @@ include("bond.jl")
 ###### system visualization functions
 ###
 
-function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.275, bond_radius::Number=0.25) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.30, bond_radius::Number=0.15) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     return visualize(
         Trajectory(s);
         color_func = color_func,
@@ -58,7 +58,7 @@ function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=defaul
 end
 
 #TODO: 回転中心の指定，平行移動速度の自動調整，回転速度のスライドバー指定
-function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.2, bond_radius::Number=0.225) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.30, bond_radius::Number=0.15) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
@@ -116,7 +116,7 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
     end
     meshscatter!(axis, atoms;
         color = atom_colors,
-        markersize = atom_radius*2,
+        markersize = atom_radius,
         inspector_label = (self, i, p) -> inspect_labels[i]
     )
 
