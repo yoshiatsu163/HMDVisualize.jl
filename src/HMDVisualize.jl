@@ -22,7 +22,7 @@ export visualize, color_scheme, default_color, atom_color
 
 const atom_color = Dict(
     elements[:H ].number => colorant"hsla(  0,   0%,  90%, 1.0)",
-    elements[:C ].number => colorant"hsla(249,  14%,  60%, 1.0)",
+    elements[:C ].number => colorant"hsla(249,  14%,  50%, 1.0)",
     elements[:N ].number => colorant"hsla(240,  70%,  78%, 1.0)",
     elements[:O ].number => colorant"hsla(351,  95%,  70%, 1.0)",
     elements[:F ].number => colorant"hsla( 95,  40%,  50%, 1.0)",
@@ -48,7 +48,7 @@ include("bond.jl")
 ###### system visualization functions
 ###
 
-function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.275, bond_radius::Number=0.25) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     return visualize(
         Trajectory(s);
         color_func = color_func,
@@ -57,7 +57,8 @@ function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=defaul
     )
 end
 
-function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.3, bond_radius::Number=0.275) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+#TODO: 回転中心の指定，平行移動速度の自動調整，回転速度のスライドバー指定
+function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.2, bond_radius::Number=0.225) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
